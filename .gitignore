@@ -174,3 +174,11 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+# Project Specific
+data/chromadb/
+data/*.json
+logs/*.log
+.env
+
+docs/
