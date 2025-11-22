@@ -14,7 +14,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from typing import List, Dict, Any, Optional
-from app.core.config import OPENAI_API_KEY, OPENAI_BASE_URL, CHROMA_PERSIST_DIR
+from app.core.config import OPENAI_API_KEY, OPENAI_BASE_URL, CHROMA_PERSIST_DIR, OPENAI_EMBEDDING_MODEL
 from app.core.logger import logger
 from datetime import datetime
 
@@ -32,7 +32,7 @@ class VectorStoreManager:
         self.collection_name = collection_name
         self.embeddings = OpenAIEmbeddings(
             api_key=OPENAI_API_KEY,
-            model="text-embedding-3-small",
+            model=OPENAI_EMBEDDING_MODEL,
             base_url=OPENAI_BASE_URL
         )
 
@@ -83,12 +83,28 @@ class VectorStoreManager:
             metadatas = []
 
             for doc in documents:
-                # Create unique ID based on item_id and doc_type
+                # Create unique ID based on item_id, doc_type, and chunk_index
                 item_id = doc.metadata.get("item_id")
                 doc_type = doc.metadata.get("doc_type", "article")
+                chunk_index = doc.metadata.get("chunk_index")
+                chunk_type = doc.metadata.get("chunk_type")
+                comment_index = doc.metadata.get("comment_index")
 
                 if item_id:
-                    doc_id = f"{item_id}_{doc_type}"
+                    # Generate unique ID based on document type and chunking
+                    if chunk_index is not None:
+                        # Article or comment chunk with index
+                        doc_id = f"{item_id}_{doc_type}_{chunk_index}"
+                    elif chunk_type:
+                        # Comment with chunk_type (full, partial, top_comment)
+                        if comment_index is not None:
+                            doc_id = f"{item_id}_{doc_type}_{chunk_type}_{comment_index}"
+                        else:
+                            doc_id = f"{item_id}_{doc_type}_{chunk_type}"
+                    else:
+                        # Simple document without chunking
+                        doc_id = f"{item_id}_{doc_type}"
+
                     doc_ids.append(doc_id)
                     metadatas.append(doc.metadata)
                 else:
@@ -125,13 +141,30 @@ class VectorStoreManager:
             List of relevant documents
         """
         try:
+            # GLM-4 embeddings API 不支持空查询，使用默认查询词
+            search_query = query if query.strip() else "article"
+
+            # Convert filter_dict to ChromaDB format (requires $and for multiple conditions)
+            chroma_filter = None
+            if filter_dict:
+                if len(filter_dict) == 1:
+                    # Single condition - use directly
+                    chroma_filter = filter_dict
+                else:
+                    # Multiple conditions - use $and operator
+                    chroma_filter = {
+                        "$and": [
+                            {key: value} for key, value in filter_dict.items()
+                        ]
+                    }
+
             results = self.vectorstore.similarity_search(
-                query=query,
+                query=search_query,
                 k=k,
-                filter=filter_dict
+                filter=chroma_filter
             )
 
-            logger.info(f"Found {len(results)} relevant documents for query: {query}")
+            logger.info(f"Found {len(results)} relevant documents for query: {query or '(empty)'}")
 
             if filter_dict:
                 logger.debug(f"Applied filters: {filter_dict}")
@@ -154,11 +187,18 @@ class VectorStoreManager:
             True if document exists, False otherwise
         """
         try:
-            expected_id = f"{item_id}_{doc_type}"
-            result = self.collection.get(ids=[expected_id], limit=1)
-            exists = len(result["ids"]) > 0
+            # Check for any document with this item_id and doc_type prefix
+            # This handles both chunked and non-chunked documents
+            prefix_id = f"{item_id}_{doc_type}"
 
-            logger.debug(f"Document {expected_id} exists: {exists}")
+            # Get all IDs and check for matches
+            result = self.collection.get()
+            all_ids = result.get("ids", [])
+
+            # Check if any ID starts with the prefix
+            exists = any(doc_id.startswith(prefix_id) for doc_id in all_ids)
+
+            logger.debug(f"Document {prefix_id}* exists: {exists}")
             return exists
 
         except Exception as e:

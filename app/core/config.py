@@ -15,6 +15,9 @@ load_dotenv()
 # Project Root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
+# Data Directory
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+
 # OpenAI Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")

@@ -54,7 +54,10 @@ class DocumentProcessor:
             logger.error("Article missing item_id, skipping")
             return []
 
-        # Prepare base metadata
+        # Prepare base metadata (convert lists to strings for ChromaDB)
+        tags = article.get("tags", [])
+        tags_str = ", ".join(tags) if isinstance(tags, list) else str(tags)
+
         base_metadata = {
             "item_id": item_id,
             "source": url,
@@ -65,7 +68,7 @@ class DocumentProcessor:
             "author": article.get("author", ""),
             "content_type": article.get("content_type", "unknown"),
             "topic": article.get("topic", ""),
-            "tags": article.get("tags", []),
+            "tags": tags_str,  # Convert list to comma-separated string
             "classification_confidence": article.get("classification_confidence", "")
         }
 

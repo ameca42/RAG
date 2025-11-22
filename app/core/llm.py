@@ -3,9 +3,9 @@ LLM initialization and prompt templates.
 """
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
-from app.core.config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_EMBEDDING_MODEL
+from app.core.config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_EMBEDDING_MODEL, OPENAI_BASE_URL
 
 
 def get_llm(temperature: float = 0.7, model: str = None) -> ChatOpenAI:
@@ -22,7 +22,8 @@ def get_llm(temperature: float = 0.7, model: str = None) -> ChatOpenAI:
     return ChatOpenAI(
         api_key=OPENAI_API_KEY,
         model=model or OPENAI_MODEL,
-        temperature=temperature
+        temperature=temperature,
+        base_url=OPENAI_BASE_URL
     )
 
 
@@ -35,7 +36,8 @@ def get_embeddings() -> OpenAIEmbeddings:
     """
     return OpenAIEmbeddings(
         api_key=OPENAI_API_KEY,
-        model=OPENAI_EMBEDDING_MODEL
+        model=OPENAI_EMBEDDING_MODEL,
+        base_url=OPENAI_BASE_URL
     )
 
 
