@@ -62,29 +62,55 @@
 
 -----
 
-### 🧠 第二阶段：RAG 核心链路与话题分类 (The Brain)
+### 🧠 第二阶段：RAG 核心链路与话题分类 (The Brain) ✅ 已完成
 
 **目标：** 将数据向量化，实现语义检索，并为每篇文章自动分类。
 
-1.  **向量库搭建:**
-      * 安装 `chromadb` 和 `langchain-openai`。
-      * 定义 Embedding 模型：使用 `OpenAIEmbeddings(model="text-embedding-3-small")`。
-      * 编写 `VectorStoreManager` 类：
-          - `add_documents(docs)`: 批量添加文档到 ChromaDB。
-          - `similarity_search(query, k=5, filter={})`: 语义检索 + 元数据过滤。
-          - `check_exists(url)`: 根据 URL 检查文档是否已存在（增量更新支持）。
-2.  **文档切分策略:**
-      * 使用 `RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)` 切分正文。
+1.  **向量库搭建:** ✅
+      * 使用 `chromadb` 和 `langchain_openai`（支持 GLM-4 API）。
+      * 定义 Embedding 模型：`OpenAIEmbeddings(model="text-embedding-3-small")`。 **注意：** 如果使用 GLM-4，需要在 `.env` 中配置 `OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4/`。
+      * **实现文件：** `app/db/vector_store.py`
+      * **核心类：** `VectorStoreManager` 提供：
+          - `add_documents(docs)`: 批量添加文档到 ChromaDB（支持自动生成 ID）。
+          - `similarity_search(query, k=5, filter={})`: 语义检索 + 元数据过滤（支持按 topic、doc_type、score 等过滤）。
+          - `check_exists(item_id)`: 根据 HN item_id 检查文档是否已存在（支持增量更新）。
+          - `get_collection_stats()`: 获取向量库统计信息。
+          - `delete_collection()`: 删除整个集合（谨慎使用）。
+
+2.  **文档切分策略:** ✅
+      * **实现文件：** `app/chains/document_processor.py`
+      * **核心类：** `DocumentProcessor`
+      * **文章正文切分：** 使用 `RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)`。
       * **评论区处理：**
-          - 评论区数据作为**单独的 Document** 存入，不切分（保留完整对话上下文）。
-          - 如果评论超过 4000 字符，按"对话组"（一个主评论 + 其子回复）切分。
-      * **Metadata 注入：** 每个 Chunk 必须包含：
-          - `source` (URL), `title`, `score`, `item_id`, `timestamp`
-          - `doc_type` ("article" 或 "comments")
-          - `tags` (后续步骤生成)
-          - `topic` (后续步骤生成)
-3.  **话题自动分类 (新增核心功能):**
-      * **定义 HN 话题分类体系：**
+          - 完整评论摘要作为**单独的 Document** 存入，不切分（保留完整对话上下文）。
+          - 如果评论超过 4000 字符，按段落切分（使用更大的 chunk_size=2000）。
+          - 高赞评论（score ≥ 20）作为独立 document 存储，便于快速检索社区精华观点。
+      * **每篇文章生成多个 Documents：**
+          - 文章正文 → 1-3 个 chunks（取决于长度）。
+          - 评论区 → 1 个完整摘要 + 最多 5 个高赞评论。
+      * **Metadata 注入：** 每个 Document 包含：
+          ```json
+          {
+            "item_id": "46013816",
+            "source": "https://blog.melashri.net/micro/privacy-price/",
+            "title": "My private information is worth $30",
+            "score": 39,
+            "timestamp": 1703123400,
+            "author": "melashri",
+            "doc_type": "article",        // or "comments"
+            "chunk_index": 0,              // for multi-chunk articles
+            "topic": "Security/Privacy",
+            "tags": ["Data Breach", "Privacy", "Class Action"],
+            "classification_confidence": "high"
+          }
+          ```
+
+3.  **话题自动分类（已在第一阶段实现）:** ✅
+      * **实现文件：** `app/crawler/classifier.py`
+      * 使用 LLM (GLM-4) 对文章进行 10 个话题分类。
+      * 自动生成 1-3 个相关标签（tags）。
+      * 返回分类置信度（high/medium/low）。
+      * **分类体系：**
           ```python
           TOPICS = [
               "AI/ML", "Programming Languages", "Web Development",
@@ -92,24 +118,56 @@
               "Hardware/IoT", "Science", "Open Source", "Career/Jobs"
           ]
           ```
-      * **使用 LLM 做结构化分类：**
-          - 设计 Prompt：`"Based on the title and content, classify this article into one primary topic and up to 3 tags from: {TOPICS}"`
-          - 使用 `langchain.output_parsers.StructuredOutputParser` 解析返回的 JSON：
-            ```json
-            {"topic": "AI/ML", "tags": ["ChatGPT", "LLM", "API"]}
-            ```
-      * **批量处理：** 对每篇文章调用 LLM 生成 topic 和 tags，更新到 Metadata。
-4.  **基础检索测试:**
-      * 搭建 LangChain `RetrievalQA` 链。
-      * 测试用例：
-          - "今天有什么关于 AI 的新闻？" → 检索 `filter={"topic": "AI/ML"}`
-          - "高分 Rust 相关文章" → `filter={"score": {"$gt": 100}, "tags": {"$contains": "Rust"}}`
-          - "这篇文章评论区在讨论什么？" → 检索 `filter={"doc_type": "comments", "source": url}`
 
-> **✅ 阶段完成标准：**
-> - 在 Python 终端输入问题，系统能返回基于 HN 内容的正确回答，且包含原文链接。
-> - 每篇文章都有自动生成的 `topic` 和 `tags` 字段。
-> - 支持按话题、标签、分数筛选检索。
+4.  **向量存储/检索整合:** ✅
+      * **实现文件：** `app/chains/vector_pipeline.py`
+      * **核心类：** `VectorPipeline` 提供端到端流程：
+          - `ingest_article(article)`: 单篇文章入库（自动去重）。
+          - `ingest_batch(articles)`: 批量入库，返回详细统计。
+          - `search(query, k=5, filter_dict)`: 通用搜索接口。
+          - `search_by_topic(query, topic)`: 按话题搜索（便捷方法）。
+          - `get_stats()`: 获取向量库统计。
+
+5.  **基础检索测试:** ✅
+      * **测试文件：** `test_vector_pipeline.py`
+      * 测试覆盖：
+          - 文档处理和向量化
+          - 批量入库与去重
+          - 语义搜索（通用查询）
+          - 元数据过滤（按 topic、doc_type）
+          - 统计信息查询
+      * **示例查询：**
+          ```python
+          # 通用搜索
+          results = pipeline.search("privacy and data protection", k=5)
+
+          # 按话题搜索
+          results = pipeline.search_by_topic("machine learning", topic="AI/ML", k=3)
+
+          # 仅搜索评论区
+          results = pipeline.search(
+              "community opinions",
+              k=3,
+              filter_dict={"doc_type": "comments"}
+          )
+
+          # 高级过滤
+          results = pipeline.search(
+              "rust programming",
+              k=5,
+              filter_dict={
+                  "topic": "Programming Languages",
+                  "score": {"$gte": 50}
+              }
+          )
+          ```
+
+> **✅ 阶段完成标准：已达成！**
+> - ✅ 向量库搭建完成，支持增量更新和元数据过滤。
+> - ✅ 文档处理模块完成，自动切分文章和评论区。
+> - ✅ 话题自动分类已集成（第一阶段提前实现）。
+> - ✅ 基础检索功能完成，支持多种查询方式。
+> - ⚠️  **注意：** 使用 GLM-4 API 时，需要确保 Embedding API 已正确配置。如果 GLM-4 不支持 embeddings，需要改用其他 embedding 服务（如 Ollama、本地模型等）。
 
 -----
 

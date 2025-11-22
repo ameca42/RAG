@@ -19,9 +19,11 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
 # ChromaDB Configuration
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./data/chromadb")
+CHROMA_PERSIST_DIR = CHROMA_DB_PATH  # Alias for compatibility
 CHROMA_COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME", "hacker_news")
 
 # Hacker News API Configuration
