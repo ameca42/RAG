@@ -63,7 +63,5 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 MAX_COMMENT_LENGTH = int(os.getenv("MAX_COMMENT_LENGTH", "4000"))
 
 # Validation
-# Note: OPENAI_API_KEY validation is commented out for testing crawler modules
-# Uncomment when using LLM features
-# if not OPENAI_API_KEY:
-#     raise ValueError("OPENAI_API_KEY environment variable is not set")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable is not set")

@@ -105,6 +105,11 @@ def prepare_article_for_storage(article: Dict[str, Any]) -> Dict[str, Any]:
         "comments_summary": article.get("comments_summary", ""),
         "top_comments": article.get("top_comments", []),
         "comment_count": article.get("comment_count", 0),
+
+        # Classification (if available)
+        "topic": article.get("topic"),
+        "tags": article.get("tags", []),
+        "classification_confidence": article.get("classification_confidence"),
     }
 
     return stored
