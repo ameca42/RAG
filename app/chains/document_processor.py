@@ -54,9 +54,15 @@ class DocumentProcessor:
             logger.error("Article missing item_id, skipping")
             return []
 
-        # Prepare base metadata (convert lists to strings for ChromaDB)
+        # Prepare base metadata
+        # Note: ChromaDB only supports str, int, float, bool metadata types
+        # Store tags as JSON string for easier parsing and filtering later
         tags = article.get("tags", [])
-        tags_str = ", ".join(tags) if isinstance(tags, list) else str(tags)
+        if not isinstance(tags, list):
+            tags = [str(tags)] if tags else []
+
+        import json
+        tags_json = json.dumps(tags) if tags else "[]"
 
         base_metadata = {
             "item_id": item_id,
@@ -68,7 +74,7 @@ class DocumentProcessor:
             "author": article.get("author", ""),
             "content_type": article.get("content_type", "unknown"),
             "topic": article.get("topic", ""),
-            "tags": tags_str,  # Convert list to comma-separated string
+            "tags": tags_json,  # Store as JSON string since ChromaDB doesn't support lists
             "classification_confidence": article.get("classification_confidence", "")
         }
 

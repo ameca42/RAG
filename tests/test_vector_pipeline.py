@@ -10,8 +10,8 @@ import sys
 import json
 from pathlib import Path
 
-# Add app to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.chains.vector_pipeline import VectorPipeline
 from app.crawler.storage import load_articles
