@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HN "Little Red Book" Feed Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for cleaner look */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+        
+        /* Masonry Grid Layout */
+        .masonry-grid {
+            column-count: 2;
+            column-gap: 1rem;
+        }
+        @media (min-width: 768px) { .masonry-grid { column-count: 3; } }
+        @media (min-width: 1024px) { .masonry-grid { column-count: 4; } }
+        .masonry-item { break-inside: avoid; margin-bottom: 1rem; }
+    </style>
+</head>
+<body class="text-gray-900 antialiased">
+
+    <nav class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center space-x-4">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8 text-orange-500">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+            </svg>
+            <h1 class="text-xl font-bold tracking-tight">Hacker News</h1>
+        </div>
+        <div class="flex space-x-6 text-sm font-medium text-gray-500">
+            <a href="#" class="text-gray-900 border-b-2 border-orange-500 pb-1">发现 (Discover)</a>
+            <a href="#" class="hover:text-gray-900 transition pb-1">关注 (Following)</a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div id="feed-container" class="masonry-grid">
+            </div>
+    </main>
+
+
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/60 z-50 hidden transition-opacity opacity-0" onclick="closeModal()">
+        <div class="fixed inset-2 md:inset-10 bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col md:flex-row transition-transform transform scale-95" onclick="event.stopPropagation()">
+            
+            <div class="flex-1 overflow-y-auto p-8 bg-white" id="article-panel">
+                <span class="inline-block bg-blue-50 text-blue-600 text-xs font-bold px-2 py-1 rounded mb-4">AI & DevTools</span>
+                <h2 class="text-3xl font-bold mb-4 leading-tight">Why We Moved From React To Svelte</h2>
+                <div class="flex items-center space-x-3 text-sm text-gray-500 mb-8">
+                    <img src="https://i.pravatar.cc/30?u=user1" alt="author" class="w-6 h-6 rounded-full">
+                    <span>jane_doe</span>
+                    <span>•</span>
+                    <span>Nov 21, 2025</span>
+                </div>
+                <article class="prose prose-lg max-w-none prose-headings:font-bold prose-a:text-blue-600">
+                    <p class="lead text-xl text-gray-600 mb-6">A deep dive into performance metrics, developer experience, and the trade-offs we encountered during a 6-month migration of our core dashboard.</p>
+                    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+                    <h3>The Performance Bottleneck</h3>
+                    <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+                    <div class="bg-gray-100 p-4 rounded-lg my-6 font-mono text-sm">
+                        // Code snippet placeholder<br>
+                        const react_render_time = 45ms;<br>
+                        const svelte_render_time = 12ms; // 🚀
+                    </div>
+                    <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+                    </article>
+            </div>
+
+            <div class="w-full md:w-[400px] bg-gray-50 border-l border-gray-100 flex flex-col relative">
+                <div class="sticky top-0 bg-gray-50/90 backdrop-blur z-10 p-4 border-b border-gray-100 flex justify-between items-center">
+                    <h3 class="font-bold text-lg">Comments (245)</h3>
+                    <button id="ask-ai-btn" onclick="toggleAISidebar()" class="flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full font-medium hover:shadow-md transition-all group">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 group-hover:animate-pulse">
+                          <path fill-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813a3.75 3.75 0 002.576-2.576l.813-2.846A.75.75 0 019 4.5zM6 20.25a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813a3.75 3.75 0 002.576-2.576l.813-2.846A.75.75 0 016 20.25z" clip-rule="evenodd" />
+                        </svg>
+                        <span>Ask AI</span>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                    <div>
+                        <div class="flex items-start space-x-3 mb-2">
+                            <img src="https://i.pravatar.cc/30?u=user2" alt="c1" class="w-8 h-8 rounded-full mt-1">
+                            <div class="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 flex-1">
+                                <div class="flex justify-between text-xs text-gray-500 mb-1">
+                                    <span class="font-bold text-gray-900">senior_dev_x</span>
+                                    <span>3h ago</span>
+                                </div>
+                                <p class="text-sm text-gray-800">Great article. But I think you missed the point about ecosystem. React's library is just too big to ignore for enterprise apps.</p>
+                            </div>
+                        </div>
+                        <div class="pl-11 flex items-start space-x-3">
+                            <div class="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex-1">
+                                <div class="flex justify-between text-xs text-gray-500 mb-1">
+                                    <span class="font-bold text-gray-900">svelte_fan</span>
+                                    <span>2h ago</span>
+                                </div>
+                                <p class="text-sm text-gray-800">Fair point, but for dashboards, performance > ecosystem sometimes. We found SvelteKit to be enough.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-3">
+                        <img src="https://i.pravatar.cc/30?u=user3" alt="c2" class="w-8 h-8 rounded-full mt-1">
+                        <div class="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 flex-1">
+                             <div class="flex justify-between text-xs text-gray-500 mb-1">
+                                <span class="font-bold text-gray-900">perf_guy</span>
+                                <span>5h ago</span>
+                            </div>
+                            <p class="text-sm text-gray-800">The benchmarks on mobile are even more impressive. We saw a 60% TTI reduction.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="ai-sidebar" class="absolute inset-0 bg-white z-20 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-l border-gray-200 shadow-[-10px_0_15px_-3px_rgba(0,0,0,0.1)]">
+                    <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
+                        <div class="flex items-center space-x-2 text-purple-700 font-bold">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813a3.75 3.75 0 002.576-2.576l.813-2.846A.75.75 0 019 4.5zM6 20.25a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813a3.75 3.75 0 002.576-2.576l.813-2.846A.75.75 0 016 20.25z" clip-rule="evenodd" /></svg>
+                            <span>AI Copilot</span>
+                        </div>
+                        <button onclick="toggleAISidebar()" class="text-gray-400 hover:text-gray-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                        <div class="flex items-start space-x-2">
+                            <div class="bg-purple-100 p-2 rounded-lg">🤖</div>
+                            <div class="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 text-sm">
+                                I've read the article and comments. What do you want to know?
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                    <button onclick="sendQuickMessage('Summarize this article in 3 bullets')" class="bg-purple-50 text-purple-700 text-xs px-3 py-1.5 rounded-full border border-purple-200 hover:bg-purple-100 transition">📝 Summarize</button>
+                                    <button onclick="sendQuickMessage('What are the main counter-arguments in comments?')" class="bg-pink-50 text-pink-700 text-xs px-3 py-1.5 rounded-full border border-pink-200 hover:bg-pink-100 transition">💬 Comment Debate</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-4 border-t border-gray-100 bg-white">
+                        <form onsubmit="handleChatSubmit(event)" class="flex items-center space-x-2 relative">
+                             <input type="text" id="chat-input" placeholder="Ask about the article or comments..." class="w-full pl-4 pr-12 py-3 bg-gray-100 border-transparent rounded-full focus:bg-white focus:border-purple-300 focus:ring-0 text-sm transition-all">
+                             <button type="submit" class="absolute right-2 bg-purple-600 text-white p-2 rounded-full hover:bg-purple-700 transition">
+                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>
+                             </button>
+                        </form>
+                    </div>
+                </div>
+                </div>
+            <button onclick="closeModal()" class="md:hidden absolute top-4 right-4 bg-white/80 backdrop-blur p-2 rounded-full text-gray-600 z-30">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Data: Mock HN Stories ---
+        const mockStories = [
+            { title: "The end of localhost", summary: "Why cloud development environments are finally ready for prime time.", domain: "wired.com", comments: 452, points: 890, image: "https://source.unsplash.com/random/400x300?server", tag: "DevOps", color: "blue" },
+            { title: "Show HN: A new way to visualize embeddings", summary: "Interactive 3D tool for exploring vector spaces in your browser.", domain: "github.com", comments: 128, points: 340, image: "https://source.unsplash.com/random/400x500?data", tag: "AI/ML", color: "purple" },
+            { title: "My journey building a SaaS to $10k MRR", summary: "Mistakes made and lessons learned bootstrapped solo founder.", domain: "indiehackers.com", comments: 230, points: 512, image: "https://source.unsplash.com/random/400x400?startup", tag: "Startup", color: "green" },
+            { title: "Rust in the Linux Kernel: A Progress Report", summary: "An update on integrating Rust drivers into the mainline kernel.", domain: "lwn.net", comments: 315, points: 670, image: "https://source.unsplash.com/random/400x350?code", tag: "Systems", color: "orange" },
+             { title: "Why We Moved From React To Svelte", summary: "Performance wins and better DX after a 6-month migration.", domain: "engineering.blog", comments: 245, points: 720, image: "https://source.unsplash.com/random/400x450?web", tag: "Frontend", color: "pink" },
+             { title: "OpenAI announces GPT-5 'Whisper' model", summary: "New multimodal model claims human-level reasoning.", domain: "openai.com", comments: 890, points: 1200, image: "https://source.unsplash.com/random/400x320?robot", tag: "AI News", color: "red" },
+             // Duplicate for waterfall effect
+             { title: "Another cool tool", summary: "Just a placeholder to show layout.", domain: "example.com", comments: 50, points: 100, image: "https://source.unsplash.com/random/400x380?abstract", tag: "Tool", color: "teal" }
+        ];
+
+        // --- Function: Render Feed Cards ---
+        function renderFeed() {
+            const container = document.getElementById('feed-container');
+            mockStories.forEach((story, index) => {
+                const card = document.createElement('div');
+                card.className = 'masonry-item break-inside-avoid mb-4 group cursor-pointer';
+                card.onclick = () => openModal(index); // Bind click handler
+                card.innerHTML = `
+                    <div class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-100 relative">
+                        <div class="aspect-w-4 aspect-h-3 bg-gray-100 relative overflow-hidden">
+                             <img src="${story.image}" alt="${story.title}" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500">
+                             <div class="absolute top-3 left-3 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold text-${story.color}-600">#${story.tag}</div>
+                        </div>
+                        <div class="p-4">
+                            <h2 class="font-bold text-lg leading-tight mb-2 line-clamp-2 group-hover:text-orange-600 transition-colors">${story.title}</h2>
+                            <p class="text-gray-600 text-sm line-clamp-3 mb-4 bg-gray-50 p-2 rounded-lg">🤖 AI摘要: ${story.summary}</p>
+                            <div class="flex items-center justify-between text-xs text-gray-400 font-medium">
+                                <div class="flex items-center space-x-1">
+                                    <span>${story.domain}</span>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <span class="flex items-center"><svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/></svg> ${story.points}</span>
+                                    <span class="flex items-center text-orange-500"><svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg> ${story.comments}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // --- Modal & Sidebar Logic ---
+        const modal = document.getElementById('modal-backdrop');
+        const modalContent = modal.querySelector('div');
+        const aiSidebar = document.getElementById('ai-sidebar');
+        const askAiBtn = document.getElementById('ask-ai-btn');
+
+        function openModal(index) {
+            // In a real app, you'd fetch data for story[index] here.
+            // For demo, we just open the static modal.
+            modal.classList.remove('hidden');
+            // Trigger reflow to enable transition
+            void modal.offsetWidth; 
+            modal.classList.remove('opacity-0');
+            modalContent.classList.remove('scale-95');
+            document.body.style.overflow = 'hidden'; // Prevent background scroll
+        }
+
+        function closeModal() {
+            modal.classList.add('opacity-0');
+            modalContent.classList.add('scale-95');
+             // Wait for transition to finish before hiding
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+                // Reset sidebar state
+                if (!aiSidebar.classList.contains('translate-x-full')) {
+                    toggleAISidebar();
+                }
+            }, 300);
+        }
+
+        function toggleAISidebar() {
+            aiSidebar.classList.toggle('translate-x-full');
+            askAiBtn.classList.toggle('opacity-0'); // Hide button when sidebar is open
+        }
+
+        // --- Chat Logic (Mock) ---
+        function handleChatSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+            addMessage('user', message);
+            input.value = '';
+            simulateAIResponse();
+        }
+
+        function sendQuickMessage(text) {
+            addMessage('user', text);
+            simulateAIResponse();
+        }
+
+        function addMessage(role, text) {
+            const container = document.getElementById('chat-messages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `flex items-start space-x-2 ${role === 'user' ? 'justify-end' : ''}`;
+            msgDiv.innerHTML = role === 'user' 
+                ? `<div class="bg-purple-600 text-white p-3 rounded-2xl rounded-tr-none shadow-sm text-sm max-w-[80%]">${text}</div>`
+                : `<div class="bg-purple-100 p-2 rounded-lg">🤖</div><div class="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 text-sm max-w-[80%]">${text}</div>`;
+            container.appendChild(msgDiv);
+            container.scrollTop = container.scrollHeight; // Auto-scroll to bottom
+        }
+
+        function simulateAIResponse() {
+            // Show typing indicator
+            const container = document.getElementById('chat-messages');
+            const typing = document.createElement('div');
+            typing.id = 'typing-indicator';
+            typing.className = 'flex items-center space-x-2';
+            typing.innerHTML = '<div class="bg-purple-100 p-2 rounded-lg">🤖</div><div class="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 text-sm"><div class="flex space-x-1"><div class="w-2 h-2 bg-gray-300 rounded-full animate-bounce"></div><div class="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style="animation-delay: 0.2s"></div><div class="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style="animation-delay: 0.4s"></div></div></div>';
+            container.appendChild(typing);
+            container.scrollTop = container.scrollHeight;
+
+            setTimeout(() => {
+                typing.remove();
+                // Mock RAG response based on the static content
+                addMessage('ai', "Based on the comments, the main debate is between **React's vast ecosystem** versus **Svelte's performance and simplicity**. User 'svelte_fan' argues that for their dashboard use case, performance was more important, citing a **60% TTI reduction on mobile**.");
+            }, 1500);
+        }
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderFeed();
+        });
+
+    </script>
+</body>
+</html>

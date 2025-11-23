@@ -170,6 +170,71 @@ class SummaryAgent:
             logger.error(f"Failed to generate quick summary: {e}")
             return content[:max_length] + "..."
 
+    def generate_summary(self, title: str, content: str, url: str = "") -> str:
+        """
+        生成文章摘要（用于 AI 对话）。
+
+        Args:
+            title: 文章标题
+            content: 文章内容
+            url: 文章 URL
+
+        Returns:
+            摘要文本
+        """
+        try:
+            prompt = f"""请为以下文章生成一个结构化的摘要：
+
+标题: {title}
+链接: {url}
+
+内容:
+{content[:3000]}
+
+请提供：
+1. **核心观点**（2-3句话）
+2. **关键要点**（3-5个要点）
+3. **主要结论**
+
+用清晰的 Markdown 格式返回。
+"""
+
+            response = self.llm.invoke(prompt)
+            return response.content.strip()
+
+        except Exception as e:
+            logger.error(f"Failed to generate summary: {e}")
+            return f"摘要生成失败: {str(e)}"
+
+    def answer_question(self, question: str, context: str) -> str:
+        """
+        基于上下文回答问题。
+
+        Args:
+            question: 用户问题
+            context: 文章/评论上下文
+
+        Returns:
+            回答文本
+        """
+        try:
+            prompt = f"""基于以下上下文，回答用户的问题。
+
+上下文：
+{context}
+
+用户问题：{question}
+
+请提供简洁、准确的回答。如果上下文中没有相关信息，请说明。
+"""
+
+            response = self.llm.invoke(prompt)
+            return response.content.strip()
+
+        except Exception as e:
+            logger.error(f"Failed to answer question: {e}")
+            return f"回答生成失败: {str(e)}"
+
     def extract_key_points(self, content: str, num_points: int = 5) -> list[str]:
         """
         提取关键要点。
