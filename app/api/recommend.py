@@ -168,13 +168,16 @@ async def get_user_profile(user_id: str = "default"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/user/history")
-async def add_to_history(
-    user_id: str,
-    item_id: str,
-    title: str,
+class AddToHistoryRequest(BaseModel):
+    """Add to history request model."""
+    user_id: str = "default"
+    item_id: str
+    title: str
     topic: str
-):
+
+
+@router.post("/user/history")
+async def add_to_history(request: AddToHistoryRequest):
     """
     Add article to user's reading history.
 
@@ -184,6 +187,10 @@ async def add_to_history(
         title: Article title
         topic: Article topic
     """
+    user_id = request.user_id
+    item_id = request.item_id
+    title = request.title
+    topic = request.topic
     try:
         logger.info(f"Adding article {item_id} to history for user {user_id}")
 

@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hacker News RAG - XHS Edition</title>
+    
+    <!-- 1. 引入核心库 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- 2. 配置 Tailwind 主题颜色 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        xhs: {
+                            red: '#ff2442',      /* 小红书品牌红 */
+                            gray: '#f5f5f5',     /* 浅灰背景 */
+                            dark: '#333333',     /* 深色字体 */
+                            border: 'rgba(0,0,0,0.05)'
+                        }
+                    },
+                    screens: {
+                        'md': '768px',
+                        'lg': '1024px',
+                        'xl': '1280px'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- 3. 自定义 CSS -->
+    <style>
+        /* 基础设置 */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f9f9f9;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 隐藏滚动条但保留滚动功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 卡片进入动画 */
+        .card-enter { 
+            animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+            opacity: 0; 
+            transform: translateY(20px); 
+        }
+        @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+        /* 详情页弹窗进入动画 */
+        .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
+        .modal-enter-from, .modal-leave-to { opacity: 0; }
+        
+        .modal-content-enter-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .modal-content-enter-from { transform: scale(0.95); opacity: 0; }
+
+        /* Markdown 内容渲染样式 (Notion/GitHub 风格) */
+        .markdown-body { color: #333; line-height: 1.75; font-size: 15px; }
+        .markdown-body h1 { font-size: 1.5em; font-weight: 700; margin: 1.2em 0 0.6em; line-height: 1.3; }
+        .markdown-body h2 { font-size: 1.25em; font-weight: 700; margin: 1.1em 0 0.5em; }
+        .markdown-body h3 { font-size: 1.1em; font-weight: 600; margin: 1em 0 0.5em; }
+        .markdown-body p { margin-bottom: 1em; text-align: justify; }
+        .markdown-body ul, .markdown-body ol { padding-left: 1.5em; margin-bottom: 1em; list-style-type: disc; }
+        .markdown-body blockquote { 
+            border-left: 4px solid #ff2442; 
+            background: #fff5f5; 
+            padding: 8px 16px; 
+            margin: 1em 0; 
+            color: #555; 
+            border-radius: 4px;
+        }
+        .markdown-body code { 
+            background: #f1f2f3; 
+            color: #d63384; 
+            padding: 2px 5px; 
+            border-radius: 4px; 
+            font-family: Menlo, Monaco, Consolas, monospace; 
+            font-size: 0.9em; 
+        }
+        .markdown-body pre { 
+            background: #282c34; 
+            color: #abb2bf; 
+            padding: 16px; 
+            border-radius: 8px; 
+            overflow-x: auto; 
+            margin: 1em 0; 
+        }
+        .markdown-body pre code { background: transparent; color: inherit; padding: 0; }
+        .markdown-body a { color: #3b82f6; text-decoration: none; border-bottom: 1px solid rgba(59,130,246,0.3); }
+        .markdown-body a:hover { border-bottom-color: #3b82f6; }
+        .markdown-body img { border-radius: 8px; max-width: 100%; margin: 1em 0; display: block; }
+        
+        /* 移动端安全距离 */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+</head>
+<body class="text-gray-900">
+
+<div id="app" class="relative min-h-screen pb-20 md:pb-0">
+
+    <!-- ================= 1. 顶部导航栏 ================= -->
+    <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md px-4 py-3 flex justify-between items-center transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)] border-b border-gray-100/50">
+        <div class="flex items-center space-x-4">
+            <i data-lucide="menu" class="w-6 h-6 text-gray-600 cursor-pointer"></i>
+            <div class="bg-xhs-red text-white text-xs font-bold px-2 py-1 rounded select-none cursor-pointer">HN</div>
+        </div>
+        
+        <!-- 中间 Tab -->
+        <div class="flex space-x-6 text-base font-medium text-gray-400 select-none">
+            <button 
+                @click="currentTab = 'follow'" 
+                class="transition-all duration-200 hover:text-gray-900"
+                :class="currentTab === 'follow' ? 'text-gray-900 font-bold text-lg transform scale-105' : ''"
+            >关注</button>
+            <button 
+                @click="currentTab = 'discover'" 
+                class="transition-all duration-200 hover:text-gray-900"
+                :class="currentTab === 'discover' ? 'text-gray-900 font-bold text-lg transform scale-105' : ''"
+            >发现</button>
+            <button 
+                @click="currentTab = 'local'" 
+                class="transition-all duration-200 hover:text-gray-900"
+                :class="currentTab === 'local' ? 'text-gray-900 font-bold text-lg transform scale-105' : ''"
+            >附近</button>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <i data-lucide="search" class="w-6 h-6 text-gray-600 cursor-pointer"></i>
+        </div>
+    </header>
+
+    <!-- ================= 2. 话题过滤器 (横向滚动) ================= -->
+    <div class="bg-white px-3 py-3 sticky top-[60px] z-30 overflow-x-auto no-scrollbar flex space-x-2 border-b border-gray-100/50 shadow-sm">
+        <button 
+            v-for="topic in topics" 
+            :key="topic.name"
+            @click="changeTopic(topic.name)"
+            class="whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300"
+            :class="activeTopic === topic.name ? 'bg-gray-900 text-white font-bold shadow-md transform scale-105' : 'bg-white border border-gray-100 text-gray-600 hover:bg-gray-50'"
+        >
+            {{ topic.label }}
+        </button>
+    </div>
+
+    <!-- ================= 3. 核心瀑布流区域 ================= -->
+    <main class="max-w-[1600px] mx-auto px-2 md:px-4 py-4 min-h-screen">
+        
+        <!-- 加载中状态 -->
+        <div v-if="loading && articles.length === 0" class="flex flex-col items-center justify-center py-32">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-xhs-red mb-4"></div>
+            <div class="text-gray-400 text-sm animate-pulse">正在探索技术前沿...</div>
+        </div>
+
+        <!-- 瀑布流容器：使用 Flex Column 方案模拟 Masonry -->
+        <div class="flex items-start gap-2 md:gap-4 lg:gap-6" v-else>
+            <!-- 动态生成列 -->
+            <div v-for="(col, colIndex) in waterfallColumns" :key="colIndex" class="flex-1 flex flex-col gap-2 md:gap-4 lg:gap-6">
+                
+                <div 
+                    v-for="item in col" 
+                    :key="item.item_id" 
+                    class="bg-white rounded-xl overflow-hidden cursor-pointer group card-enter shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 border border-xhs-border"
+                    @click="openDetail(item)"
+                >
+                    <!-- 动态生成的封面图容器 -->
+                    <div class="relative w-full overflow-hidden bg-gray-100" :class="item.aspectClass">
+                        <!-- 使用 Canvas 生成的 Base64 图片 -->
+                        <img 
+                            :src="item.generatedCover" 
+                            class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                            loading="lazy"
+                            alt="Cover"
+                        >
+                        <!-- 阴影遮罩，让文字更清晰（虽然这里文字已经在图片里了，但加个遮罩更有质感） -->
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </div>
+
+                    <!-- 卡片底部信息 -->
+                    <div class="p-3 md:p-4">
+                        <h2 class="font-bold text-[15px] leading-snug mb-2 text-gray-800 line-clamp-2 tracking-tight group-hover:text-xhs-red transition-colors">
+                            {{ item.title }}
+                        </h2>
+                        
+                        <div class="flex items-center justify-between mt-3">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <img 
+                                    :src="`https://api.dicebear.com/7.x/avataaars/svg?seed=${item.author}`" 
+                                    class="w-5 h-5 rounded-full bg-gray-100 shrink-0 border border-white"
+                                >
+                                <span class="text-xs text-gray-500 truncate">{{ item.author }}</span>
+                            </div>
+                            <div class="flex items-center gap-1 text-gray-400 group-hover:text-xhs-red transition-colors">
+                                <i data-lucide="heart" class="w-3.5 h-3.5"></i>
+                                <span class="text-xs font-medium">{{ item.score }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        
+        <!-- 底部加载更多 -->
+        <div class="text-center py-12 pb-24">
+            <button 
+                @click="fetchArticles(false)" 
+                class="text-gray-400 text-sm hover:text-xhs-red px-6 py-2 rounded-full border border-transparent hover:border-gray-200 transition-all active:scale-95"
+            >
+                {{ loading ? '加载中...' : '加载更多笔记' }}
+            </button>
+        </div>
+    </main>
+
+    <!-- ================= 4. 详情页弹窗 ================= -->
+    <transition name="modal">
+        <div v-if="selectedArticle" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-6 lg:p-12" @click.self="closeDetail">
+            
+            <div class="bg-white w-full h-full md:h-[90vh] md:max-h-[900px] md:w-[1100px] md:rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative transition-all modal-content-enter-active">
+                
+                <!-- 移动端关闭按钮 -->
+                <button 
+                    @click="closeDetail" 
+                    class="absolute top-4 left-4 z-50 bg-white/90 backdrop-blur p-2 rounded-full md:hidden shadow-lg border border-gray-100 active:scale-90 transition-transform"
+                >
+                    <i data-lucide="chevron-left" class="w-6 h-6 text-gray-800"></i>
+                </button>
+
+                <!-- 左侧: 文章正文区 -->
+                <div class="w-full md:w-3/5 h-full overflow-y-auto no-scrollbar bg-white group">
+                    <!-- 使用生成的大图作为 Banner -->
+                    <div class="relative w-full aspect-video md:aspect-[16/10] bg-gray-100 overflow-hidden cursor-zoom-in">
+                         <img :src="selectedArticle.generatedCover" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105">
+                    </div>
+                    
+                    <div class="p-5 md:p-8 pb-24 md:pb-10 max-w-3xl mx-auto">
+                        <h1 class="text-2xl md:text-3xl font-bold mb-4 text-gray-900 leading-tight tracking-tight">{{ selectedArticle.title }}</h1>
+                        
+                        <!-- 元数据栏 -->
+                        <div class="flex items-center justify-between text-xs text-gray-400 mb-8 pb-4 border-b border-gray-100">
+                            <div class="flex items-center gap-2">
+                                <span>{{ formatDate(selectedArticle.timestamp) }}</span>
+                                <span v-if="selectedArticle.domain" class="bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">{{ selectedArticle.domain }}</span>
+                            </div>
+                            <a :href="selectedArticle.url" target="_blank" class="flex items-center text-blue-600 hover:text-blue-700 hover:underline font-medium transition-colors">
+                                查看原文 <i data-lucide="external-link" class="w-3 h-3 ml-1"></i>
+                            </a>
+                        </div>
+
+                        <!-- Markdown 内容渲染 -->
+                        <div class="markdown-body" v-html="renderMarkdown(selectedArticle.content_summary)"></div>
+                        
+                        <!-- 底部话题标签 -->
+                        <div class="mt-10 flex flex-wrap gap-2">
+                             <span v-for="tag in (selectedArticle.tags || [])" class="text-blue-500 bg-blue-50 px-3 py-1 rounded-full text-xs font-medium cursor-pointer hover:bg-blue-100 transition"># {{ tag }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧: 互动区 (Tab + Chat/Comment) -->
+                <div class="w-full md:w-2/5 h-full bg-white flex flex-col border-l border-gray-100 relative shadow-[-5px_0_15px_rgba(0,0,0,0.02)]">
+                    
+                    <!-- 作者信息栏 -->
+                    <div class="p-4 bg-white border-b border-gray-100 flex justify-between items-center shrink-0 z-10">
+                        <div class="flex items-center gap-3">
+                            <img :src="`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedArticle.author}`" class="w-10 h-10 rounded-full border border-gray-100 p-0.5">
+                            <div class="flex flex-col">
+                                <span class="text-sm font-bold text-gray-900">{{ selectedArticle.author }}</span>
+                                <span class="text-[10px] text-gray-400">Hacker News 贡献者</span>
+                            </div>
+                        </div>
+                        <button class="border border-xhs-red text-xhs-red px-5 py-1.5 rounded-full text-xs font-bold hover:bg-red-50 active:scale-95 transition-all">关注</button>
+                    </div>
+
+                    <!-- Tab 切换 -->
+                    <div class="bg-white flex border-b border-gray-100 shrink-0 z-10">
+                        <button 
+                            @click="rightTab = 'comments'" 
+                            class="flex-1 py-3 text-sm font-medium transition-all relative"
+                            :class="rightTab === 'comments' ? 'text-gray-900 font-bold' : 'text-gray-400 hover:text-gray-600'"
+                        >
+                            评论 <span class="text-xs font-normal opacity-60">{{ selectedArticle.comments ? selectedArticle.comments.length : 0 }}</span>
+                            <div v-if="rightTab === 'comments'" class="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-xhs-red rounded-full transition-all"></div>
+                        </button>
+                        <button 
+                            @click="rightTab = 'chat'" 
+                            class="flex-1 py-3 text-sm font-medium transition-all relative"
+                            :class="rightTab === 'chat' ? 'text-gray-900 font-bold' : 'text-gray-400 hover:text-gray-600'"
+                        >
+                            <span class="flex items-center justify-center gap-1.5">
+                                AI 伴读 <i data-lucide="sparkles" class="w-3.5 h-3.5" :class="rightTab === 'chat' ? 'text-purple-500 fill-purple-500' : ''"></i> 
+                            </span>
+                            <div v-if="rightTab === 'chat'" class="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-purple-500 rounded-full transition-all"></div>
+                        </button>
+                    </div>
+
+                    <!-- 滚动内容容器 -->
+                    <div class="flex-1 overflow-y-auto p-4 bg-gray-50 scroll-smooth" id="chat-scroll-container">
+                        
+                        <!-- 1. 评论模式 -->
+                        <div v-if="rightTab === 'comments'" class="space-y-6 pb-4 bg-white min-h-full px-2">
+                             <div v-if="!selectedArticle.comments || selectedArticle.comments.length === 0" class="flex flex-col items-center justify-center py-20 text-gray-300">
+                                 <i data-lucide="message-square" class="w-12 h-12 mb-2 opacity-50"></i>
+                                 <span class="text-xs">还没有人评论，快来抢沙发</span>
+                             </div>
+
+                             <div v-for="c in selectedArticle.comments" :key="c.id" class="flex gap-3 group">
+                                 <img :src="`https://api.dicebear.com/7.x/avataaars/svg?seed=${c.author}`" class="w-8 h-8 rounded-full shrink-0 border border-gray-100 bg-white">
+                                 <div class="flex-1 border-b border-gray-50 pb-4">
+                                     <div class="text-xs text-gray-400 mb-1 flex items-center justify-between">
+                                         <span class="font-medium text-gray-600">{{ c.author }}</span>
+                                         <span>{{ formatDate(c.time) }}</span>
+                                     </div>
+                                     <div class="text-sm text-gray-800 leading-relaxed markdown-body" v-html="renderMarkdown(c.text)"></div>
+                                     
+                                     <div class="flex gap-5 mt-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                         <div class="flex items-center gap-1 cursor-pointer hover:text-xhs-red"><i data-lucide="heart" class="w-3.5 h-3.5"></i></div>
+                                         <div class="flex items-center gap-1 cursor-pointer hover:text-blue-500"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i></div>
+                                     </div>
+                                 </div>
+                             </div>
+                        </div>
+
+                        <!-- 2. AI 聊天模式 -->
+                        <div v-else class="space-y-4 pb-4">
+                            <!-- AI 智能研报卡片 -->
+                            <div class="bg-white p-5 rounded-2xl border border-purple-100 shadow-sm transition-all hover:shadow-md">
+                                <div class="flex items-center gap-2 mb-3 text-purple-600 font-bold text-sm">
+                                    <div class="bg-purple-100 p-1.5 rounded-lg"><i data-lucide="bot" class="w-4 h-4"></i></div>
+                                    <span>智能研报</span>
+                                </div>
+                                <div v-if="articleAnalysis" class="text-sm text-gray-600 leading-relaxed markdown-body animate-in fade-in">
+                                    <div v-html="renderMarkdown(articleAnalysis.summary?.key_insights?.[0] || articleAnalysis.summary?.main_points?.[0] || '分析完成。')"></div>
+                                </div>
+                                <div v-else class="flex space-x-1 h-6 items-center">
+                                    <span class="text-xs text-gray-400 mr-2">AI 正在阅读文章并生成摘要...</span>
+                                    <div class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce"></div>
+                                    <div class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce delay-100"></div>
+                                    <div class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce delay-200"></div>
+                                </div>
+                            </div>
+
+                            <!-- 聊天气泡流 -->
+                            <div v-for="(msg, idx) in chatHistory" :key="idx" class="flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300" :class="msg.role === 'user' ? 'flex-row-reverse' : ''">
+                                <!-- 头像 -->
+                                <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm overflow-hidden" 
+                                     :class="msg.role === 'ai' ? 'bg-gradient-to-br from-purple-100 to-white border border-purple-100' : 'bg-gray-800'">
+                                     <i v-if="msg.role === 'ai'" data-lucide="sparkles" class="w-4 h-4 text-purple-500"></i>
+                                     <i v-else data-lucide="user" class="w-4 h-4 text-white"></i>
+                                </div>
+                                
+                                <!-- 消息内容 -->
+                                <div class="max-w-[85%] text-sm p-3.5 rounded-2xl shadow-sm leading-relaxed"
+                                     :class="msg.role === 'ai' ? 'bg-white text-gray-800 rounded-tl-none border border-gray-100' : 'bg-xhs-red text-white rounded-tr-none shadow-red-100'">
+                                    
+                                    <div v-if="msg.loading" class="flex space-x-1 items-center h-5 px-1">
+                                        <div class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
+                                        <div class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce delay-100"></div>
+                                        <div class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce delay-200"></div>
+                                    </div>
+                                    <div v-else class="markdown-body" :class="msg.role==='user'?'text-white':''" v-html="renderMarkdown(msg.content)"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 底部输入框 -->
+                    <div class="p-3 bg-white border-t border-gray-100 shrink-0 pb-safe">
+                         <div class="flex items-center gap-2 bg-gray-100 rounded-full px-4 py-2.5 transition-all focus-within:bg-white focus-within:ring-2 focus-within:shadow-md"
+                              :class="rightTab === 'chat' ? 'focus-within:ring-purple-100' : 'focus-within:ring-red-100'">
+                            
+                            <i :data-lucide="rightTab === 'chat' ? 'sparkles' : 'pen-line'" class="w-4 h-4" :class="rightTab === 'chat' ? 'text-purple-500' : 'text-gray-400'"></i>
+                            
+                            <input 
+                                v-model="inputMessage" 
+                                @keyup.enter="handleSend"
+                                type="text" 
+                                :placeholder="rightTab === 'chat' ? '向 AI 提问...' : '说点好听的...'" 
+                                class="bg-transparent flex-1 text-sm outline-none placeholder-gray-400"
+                            >
+                            
+                            <button 
+                                @click="handleSend"
+                                class="font-bold text-sm px-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                :class="rightTab === 'chat' ? 'text-purple-600 hover:text-purple-700' : 'text-xhs-red hover:text-red-700'"
+                                :disabled="!inputMessage.trim()"
+                            >
+                                发送
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- ================= 5. 移动端底部导航栏 ================= -->
+    <nav class="md:hidden fixed bottom-0 w-full bg-white/95 backdrop-blur-md border-t border-gray-200 flex justify-around py-3 z-30 pb-safe text-[10px]">
+        <a href="#" class="flex flex-col items-center text-black font-bold gap-1 transform scale-105">
+            <span class="text-lg">首页</span>
+        </a>
+        <a href="#" class="flex flex-col items-center text-gray-400 gap-1 hover:text-gray-600">
+            <span class="text-lg">视频</span>
+        </a>
+        <a href="#" class="flex flex-col items-center justify-center">
+             <div class="bg-xhs-red text-white w-12 h-8 rounded-xl flex items-center justify-center shadow-lg shadow-red-200 active:scale-95 transition-transform">
+                <i data-lucide="plus" class="w-5 h-5"></i>
+             </div>
+        </a>
+        <a href="#" class="flex flex-col items-center text-gray-400 gap-1 hover:text-gray-600">
+            <span class="text-lg">消息</span>
+        </a>
+        <a href="#" class="flex flex-col items-center text-gray-400 gap-1 hover:text-gray-600">
+            <span class="text-lg">我</span>
+        </a>
+    </nav>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+
+    // --- 核心工具：Canvas 封面生成器 (Client-Side Generation) ---
+    // 这个函数会动态生成高颜值的“大字报”风格图片
+    const generateCover = (title, topic, itemId, width, height) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // 1. 确定性随机配色 (根据 itemId 保证每次刷新颜色一致)
+        const seed = parseInt(String(itemId).slice(-1)) || 0;
+        const gradients = [
+            ['#FF9A9E', '#FECFEF'], ['#a18cd1', '#fbc2eb'], ['#84fab0', '#8fd3f4'],
+            ['#fccb90', '#d57eeb'], ['#e0c3fc', '#8ec5fc'], ['#fa709a', '#fee140'],
+            ['#4facfe', '#00f2fe'], ['#43e97b', '#38f9d7'], ['#30cfd0', '#330867'],
+            ['#c471f5', '#fa71cd']
+        ];
+        const [color1, color2] = gradients[seed % gradients.length];
+
+        // 2. 绘制渐变背景
+        const grd = ctx.createLinearGradient(0, 0, width, height);
+        grd.addColorStop(0, color1);
+        grd.addColorStop(1, color2);
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, width, height);
+
+        // 3. 添加微噪点纹理 (提升质感)
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        for(let i=0; i<150; i++) {
+            ctx.beginPath();
+            ctx.arc(Math.random()*width, Math.random()*height, Math.random()*2, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // 4. 文字排版 (自动换行算法)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = 'rgba(0,0,0,0.15)';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetY = 4;
+        
+        // 字体大小自适应
+        const fontSize = Math.floor(width / 9); 
+        ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.textBaseline = 'middle';
+
+        const words = title.split(' ');
+        let line = '';
+        let lines = [];
+        const maxWidth = width - 50; // Padding
+
+        for(let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && n > 0) {
+                lines.push(line);
+                line = words[n] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line);
+        if (lines.length > 4) lines = lines.slice(0, 4); // 最多显示4行
+
+        const lineHeight = fontSize * 1.35;
+        const totalHeight = lines.length * lineHeight;
+        const startY = (height - totalHeight) / 2;
+
+        lines.forEach((l, i) => {
+            ctx.fillText(l.trim(), 25, startY + (i * lineHeight));
+        });
+
+        // 5. 绘制话题标签
+        if (topic) {
+            const tagText = `# ${topic.split('/')[0]}`;
+            ctx.font = `bold ${Math.floor(width/22)}px sans-serif`;
+            const tagWidth = ctx.measureText(tagText).width + 24;
+            
+            ctx.fillStyle = 'rgba(0,0,0,0.25)'; // 半透明黑底
+            // 兼容性写法: fillRect 模拟圆角
+            ctx.fillRect(25, startY - 50, tagWidth, 30);
+            
+            ctx.fillStyle = '#fff';
+            ctx.fillText(tagText, 37, startY - 35);
+        }
+
+        // 6. 底部水印
+        ctx.font = `${Math.floor(width/26)}px sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillText('Hacker News', 25, height - 30);
+
+        return canvas.toDataURL('image/jpeg', 0.85);
+    };
+
+    createApp({
+        setup() {
+            // 配置后端地址
+            const API_BASE = 'http://localhost:8000';
+            
+            // --- 状态管理 ---
+            const articles = ref([]);
+            const loading = ref(false);
+            const currentTab = ref('discover');
+            const activeTopic = ref('');
+            const page = ref(1);
+            
+            // 响应式列数
+            const columnCount = ref(2);
+
+            const topics = ref([
+                { name: '', label: '推荐' },
+                { name: 'AI/ML', label: 'AI/机器学习' },
+                { name: 'Startups/Business', label: '创业/商业' },
+                { name: 'Web Development', label: 'Web开发' },
+                { name: 'Security/Privacy', label: '安全/隐私' },
+                { name: 'Databases', label: '数据库' },
+                { name: 'Programming Languages', label: '编程语言' },
+                { name: 'Hardware/IoT', label: '硬件' },
+                { name: 'Science', label: '科学' }
+            ]);
+
+            // 详情页状态
+            const selectedArticle = ref(null);
+            const rightTab = ref('comments'); // 'comments' | 'chat'
+            const articleAnalysis = ref(null);
+            const chatHistory = ref([]);
+            const inputMessage = ref('');
+
+            // --- 瀑布流逻辑 ---
+            const updateColumns = () => {
+                if (window.innerWidth >= 1280) columnCount.value = 4;
+                else if (window.innerWidth >= 768) columnCount.value = 3;
+                else columnCount.value = 2;
+            };
+
+            // 计算属性：将文章分配到 N 列
+            const waterfallColumns = computed(() => {
+                const cols = Array.from({ length: columnCount.value }, () => []);
+                articles.value.forEach((item, index) => {
+                    cols[index % columnCount.value].push(item);
+                });
+                return cols;
+            });
+
+            // 随机卡片比例生成器
+            const getRandomAspect = () => {
+                const r = Math.random();
+                // 模拟小红书的比例分布：长图居多
+                if (r > 0.60) return { class: 'aspect-[3/4]', w: 600, h: 800 }; // 3:4 长图
+                if (r > 0.30) return { class: 'aspect-square', w: 600, h: 600 }; // 1:1 方图
+                return { class: 'aspect-[4/3]', w: 800, h: 600 }; // 4:3 短图
+            };
+
+            // --- API 交互 ---
+            const fetchArticles = async (reset = false) => {
+                if (loading.value) return;
+                loading.value = true;
+                
+                if (reset) {
+                    articles.value = [];
+                    page.value = 1;
+                }
+
+                try {
+                    let url = `${API_BASE}/api/articles/feed?page=${page.value}&per_page=20`;
+                    if (activeTopic.value) url += `&topic=${encodeURIComponent(activeTopic.value)}`;
+                    
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    
+                    if (data.articles) {
+                        // 预处理：为每篇文章生成封面和比例
+                        const newItems = data.articles.map(item => {
+                            const aspect = getRandomAspect();
+                            // Client-side Cover Gen
+                            const coverUrl = generateCover(item.title, item.topic, item.item_id, aspect.w, aspect.h);
+                            
+                            return {
+                                ...item,
+                                aspectClass: aspect.class,
+                                generatedCover: coverUrl 
+                            };
+                        });
+                        
+                        articles.value.push(...newItems);
+                        page.value++;
+                    }
+                } catch(e) { 
+                    console.error("Fetch Error:", e);
+                } finally { 
+                    loading.value = false; 
+                }
+            };
+
+            const changeTopic = (t) => {
+                activeTopic.value = t;
+                fetchArticles(true);
+            };
+
+            // 打开详情页
+            const openDetail = async (item) => {
+                selectedArticle.value = item;
+                rightTab.value = 'comments';
+                chatHistory.value = [];
+                articleAnalysis.value = null;
+                inputMessage.value = '';
+                document.body.style.overflow = 'hidden'; // 禁止背景滚动
+
+                try {
+                    // 并行请求：获取详情 + AI 分析
+                    const detailPromise = fetch(`${API_BASE}/api/articles/${item.item_id}`).then(r => r.json());
+                    const analysisPromise = fetch(`${API_BASE}/api/chat/analyze-article`, {
+                        method: 'POST', 
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ item_id: String(item.item_id) })
+                    }).then(r => r.json());
+
+                    // 1. 更新详情
+                    const detailData = await detailPromise;
+                    selectedArticle.value = { ...selectedArticle.value, ...detailData.article, comments: detailData.comments };
+
+                    // 2. 更新分析结果
+                    const analysisData = await analysisPromise;
+                    articleAnalysis.value = analysisData;
+
+                } catch(e) {
+                    console.error("Detail Error:", e);
+                }
+            };
+
+            const closeDetail = () => {
+                selectedArticle.value = null;
+                document.body.style.overflow = '';
+            };
+
+            // 发送消息 (评论或AI)
+            const handleSend = async () => {
+                if (!inputMessage.value.trim()) return;
+                const msg = inputMessage.value;
+                inputMessage.value = '';
+
+                if (rightTab.value === 'chat') {
+                    // AI 模式
+                    chatHistory.value.push({ role: 'user', content: msg });
+                    chatHistory.value.push({ role: 'ai', content: '', loading: true });
+                    scrollToChatBottom();
+
+                    try {
+                        const res = await fetch(`${API_BASE}/api/articles/${selectedArticle.value.item_id}/chat`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ 
+                                message: msg, 
+                                history: chatHistory.value.filter(m => !m.loading).map(m => ({role: m.role, content: m.content}))
+                            })
+                        });
+                        const data = await res.json();
+                        chatHistory.value.pop(); // 移除 loading
+                        chatHistory.value.push({ role: 'ai', content: data.response });
+                    } catch(e) {
+                        chatHistory.value.pop();
+                        chatHistory.value.push({ role: 'ai', content: "网络连接似乎断开了，请稍后再试。" });
+                    }
+                    scrollToChatBottom();
+                } else {
+                    // 评论模式 (前端模拟插入，实际应该调用API)
+                    const newComment = {
+                        id: Date.now(),
+                        author: '我',
+                        time: Date.now()/1000,
+                        text: msg
+                    };
+                    if (!selectedArticle.value.comments) selectedArticle.value.comments = [];
+                    selectedArticle.value.comments.unshift(newComment);
+                }
+            };
+
+            // 工具函数
+            const scrollToChatBottom = () => {
+                nextTick(() => {
+                    const container = document.getElementById('chat-scroll-container');
+                    if (container) container.scrollTop = container.scrollHeight;
+                });
+            };
+
+            const formatDate = (ts) => {
+                if (!ts) return '';
+                return new Date(ts * 1000).toLocaleDateString('zh-CN');
+            };
+
+            // Markdown 渲染 (防止 XSS 需要 sanitize，这里演示简化版)
+            const renderMarkdown = (text) => {
+                if (!text) return '';
+                // 如果是纯文本评论，简单处理换行
+                if (!text.includes('\n') && !text.includes('#')) return text;
+                return marked.parse(text);
+            };
+
+            // 生命周期
+            onMounted(() => {
+                fetchArticles();
+                updateColumns();
+                window.addEventListener('resize', updateColumns);
+                // 初始化图标
+                lucide.createIcons();
+            });
+
+            // 监听数据变化刷新图标
+            watch([articles, selectedArticle, rightTab], () => {
+                nextTick(() => lucide.createIcons());
+            });
+
+            return {
+                // State
+                articles, loading, currentTab, topics, activeTopic,
+                selectedArticle, rightTab, articleAnalysis, chatHistory, inputMessage,
+                waterfallColumns,
+                // Actions
+                fetchArticles, changeTopic, openDetail, closeDetail, handleSend,
+                formatDate, renderMarkdown
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

@@ -77,6 +77,7 @@ async def get_articles_feed(
                 "topic": article.get("topic"),
                 "tags": tags,
                 "classification_confidence": article.get("classification_confidence"),
+                "comment_count": len(article.get("top_comments", [])),  # 修复：添加comment_count字段
                 "ai_summary": article.get("ai_summary") or (article.get("content_summary", "")[:150] + "..." if article.get("content_summary") else None)
             })
 
@@ -175,6 +176,7 @@ async def get_latest_articles(
 async def get_article_by_id(item_id: str):
     """
     Get a specific article by ID with full details.
+    Automatically fetches full content via Jina Reader.
     """
     try:
         logger.info(f"Getting article: {item_id}")
@@ -195,6 +197,24 @@ async def get_article_by_id(item_id: str):
                 tags = json.loads(tags)
             except:
                 tags = []
+
+        # Always fetch full content
+        full_content = None
+        if article.get("url"):
+            try:
+                from app.crawler.fetcher import ArticleFetcher
+                fetcher = ArticleFetcher()
+                full_content = await fetcher.fetch_content(article.get("url"))
+                if full_content:
+                    logger.info(f"Fetched full content: {len(full_content)} chars")
+                else:
+                    logger.warning("Jina Reader returned empty content, using summary")
+            except Exception as e:
+                logger.warning(f"Failed to fetch full content: {e}, using summary")
+                full_content = None
+
+        # Use full content if available, otherwise fall back to summary
+        content = full_content if full_content else article.get("content_summary")
 
         # Format comments for display
         comments = []
@@ -219,7 +239,7 @@ async def get_article_by_id(item_id: str):
                 "timestamp": article.get("timestamp"),
                 "crawl_date": article.get("crawl_date"),
                 "content_type": article.get("content_type"),
-                "content_summary": article.get("content_summary"),
+                "content_summary": content,
                 "comments_summary": article.get("comments_summary"),
                 "top_comments": top_comments,
                 "topic": article.get("topic"),

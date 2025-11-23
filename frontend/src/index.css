@@ -2,31 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar for cleaner look */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
-
-/* Masonry Grid Layout */
-.masonry-grid {
-  column-count: 2;
-  column-gap: 1rem;
+/* 隐藏滚动条但保留功能 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-@media (min-width: 768px) {
-  .masonry-grid {
-    column-count: 3;
-  }
+/* markdown 样式 */
+.markdown-body {
+  line-height: 1.6;
 }
 
-@media (min-width: 1024px) {
-  .masonry-grid {
-    column-count: 4;
-  }
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
 }
 
-.masonry-item {
-  break-inside: avoid;
+.markdown-body p {
   margin-bottom: 1rem;
+}
+
+.markdown-body a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.markdown-body code {
+  background-color: #f1f5f9;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+
+/* 移动端适配 */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 24px);
+}
+
+.safe-pb {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 1rem));
 }

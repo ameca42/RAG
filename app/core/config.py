@@ -42,7 +42,7 @@ CRAWLER_TIMEOUT = int(os.getenv("CRAWLER_TIMEOUT", "30"))
 # Comment Parsing Configuration
 MAX_TOP_LEVEL_COMMENTS = int(os.getenv("MAX_TOP_LEVEL_COMMENTS", "10"))
 MAX_REPLIES_PER_COMMENT = int(os.getenv("MAX_REPLIES_PER_COMMENT", "3"))
-HIGH_SCORE_THRESHOLD = int(os.getenv("HIGH_SCORE_THRESHOLD", "20"))
+HIGH_SCORE_THRESHOLD = int(os.getenv("HIGH_SCORE_THRESHOLD", "1"))
 
 # Application Settings
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")

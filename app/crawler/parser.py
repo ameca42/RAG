@@ -134,11 +134,27 @@ class CommentParser:
             # Check if high score
             if comment.get("score", 0) >= self.high_score_threshold:
                 high_score_comments.append({
+                    "id": comment.get("id", 0),
                     "author": comment.get("by", "anonymous"),
                     "text": self._clean_text(comment.get("text", "")),
-                    "score": comment.get("score", 0)
+                    "score": comment.get("score", 0),
+                    "time": comment.get("time", 0)
                 })
 
+          # 如果没有高分评论，添加前几个评论作为代表
+        if not high_score_comments and top_comments:
+            for comment in top_comments[:5]:  # 添加前5个评论作为代表
+                comment_text = self._clean_text(comment.get("text", ""))
+                if comment_text:  # 确保评论不为空
+                    high_score_comments.append({
+                        "id": comment.get("id", 0),
+                        "author": comment.get("by", "anonymous"),
+                        "text": comment_text,
+                        "score": comment.get("score", 0),
+                        "time": comment.get("time", 0)
+                    })
+
+        for comment in top_comments:
             # Fetch replies
             reply_ids = comment.get("kids", [])
             if reply_ids:
@@ -151,9 +167,11 @@ class CommentParser:
                     # Check if high score reply
                     if reply.get("score", 0) >= self.high_score_threshold:
                         high_score_comments.append({
+                            "id": reply.get("id", 0),
                             "author": reply.get("by", "anonymous"),
                             "text": self._clean_text(reply.get("text", "")),
-                            "score": reply.get("score", 0)
+                            "score": reply.get("score", 0),
+                            "time": reply.get("time", 0)
                         })
 
         comments_summary = "\n\n".join(formatted_lines)

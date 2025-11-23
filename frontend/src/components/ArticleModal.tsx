@@ -1,195 +1,280 @@
-import { useState, useEffect } from 'react';
-import type { Article, Comment, ChatMessage } from '../types/index';
-import { fetchArticleDetail, chatWithArticle } from '../api';
-import { AICopilot } from './AICopilot';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronLeft, Sparkles, Bot, User, Send, Heart, MessageCircle, ExternalLink } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
-interface ArticleModalProps {
-  articleId: number | null;
+interface Comment {
+  id: number;
+  author: string;
+  time: number;
+  text: string;
+}
+
+interface ArticleDetail {
+  item_id: number;
+  title: string;
+  url: string;
+  author: string;
+  timestamp: number;
+  content_summary: string;
+  comments: Comment[];
+  generatedCover?: string;
+  [key: string]: any;
+}
+
+interface Props {
+  article: ArticleDetail; // 传入的基础信息
   onClose: () => void;
 }
 
-export function ArticleModal({ articleId, onClose }: ArticleModalProps) {
-  const [article, setArticle] = useState<Article | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showAI, setShowAI] = useState(false);
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [chatLoading, setChatLoading] = useState(false);
+const API_BASE = 'http://localhost:8000';
 
+const ArticleModal: React.FC<Props> = ({ article: initialArticle, onClose }) => {
+  const [detail, setDetail] = useState<ArticleDetail>(initialArticle);
+  const [activeTab, setActiveTab] = useState<'comments' | 'chat'>('comments');
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [chatHistory, setChatHistory] = useState<Array<{role: string, content: string, loading?: boolean}>>([]);
+  const [inputMsg, setInputMsg] = useState('');
+  const scrollBoxRef = useRef<HTMLDivElement>(null);
+
+  // 初始化：获取详情 + AI 分析
   useEffect(() => {
-    if (articleId) {
-      loadArticle(articleId);
-    }
-  }, [articleId]);
+    document.body.style.overflow = 'hidden';
 
-  const loadArticle = async (id: number) => {
-    setLoading(true);
-    try {
-      const data = await fetchArticleDetail(id);
-      setArticle(data.article);
-      setComments(data.comments);
-    } catch (error) {
-      console.error('Failed to load article:', error);
-    } finally {
-      setLoading(false);
+    // Fetch full details
+    fetch(`${API_BASE}/api/articles/${initialArticle.item_id}`)
+      .then(r => r.json())
+      .then(data => {
+        setDetail(prev => ({ ...prev, ...data.article, comments: data.comments }));
+      })
+      .catch(console.error);
+
+    // Fetch AI Analysis
+    fetch(`${API_BASE}/api/chat/analyze-article`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: String(initialArticle.item_id) })
+    })
+    .then(r => r.json())
+    .then(data => setAnalysis(data))
+    .catch(console.error);
+
+    return () => { document.body.style.overflow = ''; };
+  }, [initialArticle.item_id]);
+
+  // 滚动到底部
+  useEffect(() => {
+    if (activeTab === 'chat' && scrollBoxRef.current) {
+      scrollBoxRef.current.scrollTop = scrollBoxRef.current.scrollHeight;
+    }
+  }, [chatHistory, activeTab]);
+
+  const handleSend = async () => {
+    if (!inputMsg.trim()) return;
+
+    if (activeTab === 'chat') {
+      const msg = inputMsg;
+      setInputMsg('');
+      setChatHistory(prev => [...prev, { role: 'user', content: msg }]);
+      setChatHistory(prev => [...prev, { role: 'ai', content: '', loading: true }]);
+
+      try {
+        const res = await fetch(`${API_BASE}/api/articles/${detail.item_id}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: msg,
+            history: chatHistory.filter(m => !m.loading).map(m => ({ role: m.role, content: m.content }))
+          })
+        });
+        const data = await res.json();
+        setChatHistory(prev => {
+          const newHistory = [...prev];
+          newHistory.pop(); // remove loading
+          newHistory.push({ role: 'ai', content: data.response });
+          return newHistory;
+        });
+      } catch (e) {
+        setChatHistory(prev => {
+            const newHistory = [...prev];
+            newHistory.pop();
+            newHistory.push({ role: 'ai', content: '网络错误，请重试' });
+            return newHistory;
+        });
+      }
+    } else {
+      // 本地模拟评论
+      const newComment = {
+          id: Date.now(),
+          author: 'Me',
+          time: Date.now() / 1000,
+          text: inputMsg
+      };
+      setDetail(prev => ({
+          ...prev,
+          comments: [newComment, ...(prev.comments || [])]
+      }));
+      setInputMsg('');
     }
   };
-
-  const handleChat = async (message: string) => {
-    if (!articleId) return;
-
-    setChatHistory(prev => [...prev, { role: 'user', content: message }]);
-    setChatLoading(true);
-
-    try {
-      const response = await chatWithArticle(articleId, message, chatHistory);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: response.response }]);
-    } catch (error) {
-      console.error('Chat failed:', error);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: '抱歉，AI 响应失败，请稍后重试。' }]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  if (!articleId) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 z-50 transition-opacity"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm md:p-8 animate-in fade-in duration-200" onClick={onClose}>
       <div
-        className="fixed inset-2 md:inset-10 bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col md:flex-row"
-        onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full h-full md:h-[90vh] md:w-[1100px] md:rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative"
+        onClick={e => e.stopPropagation()}
       >
-        {/* Article Content Panel */}
-        <div className="flex-1 overflow-y-auto p-8 bg-white">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-            </div>
-          ) : article ? (
-            <>
-              <span className="inline-block bg-blue-50 text-blue-600 text-xs font-bold px-2 py-1 rounded mb-4">
-                {article.topic}
-              </span>
-              <h2 className="text-3xl font-bold mb-4 leading-tight">{article.title}</h2>
-              <div className="flex items-center space-x-3 text-sm text-gray-500 mb-8">
-                <span className="font-medium">{article.author}</span>
-                <span>•</span>
-                <span>{article.crawl_date}</span>
-                <span>•</span>
-                <span>{article.score} points</span>
-              </div>
-              <article className="prose prose-lg max-w-none">
-                {article.content_summary ? (
-                  <div className="whitespace-pre-wrap">{article.content_summary}</div>
-                ) : (
-                  <p className="text-gray-500">
-                    No content available.
-                    <a href={article.url} target="_blank" rel="noopener noreferrer" className="text-orange-500 ml-2">
-                      View original →
-                    </a>
-                  </p>
-                )}
-              </article>
-              {article.url && (
-                <div className="mt-6">
-                  <a
-                    href={article.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center text-orange-500 hover:text-orange-600"
-                  >
-                    阅读原文 →
-                  </a>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="text-gray-500">Article not found</p>
-          )}
-        </div>
+        {/* Mobile Close */}
+        <button onClick={onClose} className="absolute top-4 left-4 z-50 bg-white/90 p-2 rounded-full md:hidden shadow-lg">
+          <ChevronLeft className="w-6 h-6 text-gray-800" />
+        </button>
 
-        {/* Comments Panel */}
-        <div className="w-full md:w-[400px] bg-gray-50 border-l border-gray-100 flex flex-col relative">
-          {/* Header */}
-          <div className="sticky top-0 bg-gray-50/90 backdrop-blur z-10 p-4 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-bold text-lg">Comments ({comments.length})</h3>
-            <button
-              onClick={() => setShowAI(!showAI)}
-              className="flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full font-medium hover:shadow-md transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                <path fillRule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813a3.75 3.75 0 002.576-2.576l.813-2.846A.75.75 0 019 4.5z" clipRule="evenodd" />
-              </svg>
-              <span>Ask AI</span>
-            </button>
+        {/* LEFT: Content */}
+        <div className="w-full md:w-3/5 h-full overflow-y-auto no-scrollbar bg-white">
+          <div className="relative w-full aspect-video bg-gray-100">
+             {detail.generatedCover && <img src={detail.generatedCover} className="absolute inset-0 w-full h-full object-cover" />}
           </div>
 
-          {/* Comments List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {comments.length > 0 ? (
-              comments.map((comment) => (
-                <CommentItem key={comment.id} comment={comment} />
-              ))
-            ) : article?.comments_summary ? (
-              <div className="text-sm text-gray-600 whitespace-pre-wrap">
-                {article.comments_summary}
+          <div className="p-6 pb-20 md:pb-10 max-w-3xl mx-auto">
+            <h1 className="text-2xl font-bold mb-4 text-gray-900 leading-tight">{detail.title}</h1>
+            <div className="flex items-center justify-between text-xs text-gray-400 mb-6 pb-4 border-b border-gray-100">
+                <span>{new Date(detail.timestamp * 1000).toLocaleDateString()}</span>
+                <a href={detail.url} target="_blank" rel="noreferrer" className="flex items-center text-blue-600 hover:underline">
+                    查看原文 <ExternalLink className="w-3 h-3 ml-1" />
+                </a>
+            </div>
+
+            <div className="markdown-body prose prose-sm max-w-none text-justify text-gray-800">
+              <ReactMarkdown>{detail.content_summary || ''}</ReactMarkdown>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: Interaction */}
+        <div className="w-full md:w-2/5 h-full bg-gray-50 flex flex-col border-l border-gray-100 relative">
+
+          {/* Author Header */}
+          <div className="p-4 bg-white border-b border-gray-100 flex justify-between items-center shrink-0">
+            <div className="flex items-center gap-3">
+              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${detail.author}`} className="w-9 h-9 rounded-full border bg-gray-50" />
+              <div>
+                  <div className="text-sm font-bold text-gray-900">{detail.author}</div>
+                  <div className="text-[10px] text-gray-400">知名博主</div>
               </div>
+            </div>
+            <button className="border border-xhs-red text-xhs-red px-5 py-1.5 rounded-full text-xs font-bold hover:bg-red-50 transition">关注</button>
+          </div>
+
+          {/* Tabs */}
+          <div className="bg-white flex border-b border-gray-100 shrink-0">
+             <button
+                onClick={() => setActiveTab('comments')}
+                className={`flex-1 py-3 text-sm font-medium relative transition-colors ${activeTab === 'comments' ? 'font-bold text-gray-900' : 'text-gray-400'}`}
+             >
+                评论 {detail.comments?.length || 0}
+                {activeTab === 'comments' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-xhs-red rounded-full" />}
+             </button>
+             <button
+                onClick={() => setActiveTab('chat')}
+                className={`flex-1 py-3 text-sm font-medium relative transition-colors ${activeTab === 'chat' ? 'font-bold text-gray-900' : 'text-gray-400'}`}
+             >
+                <span className="flex items-center justify-center gap-1">
+                    <Sparkles className={`w-3.5 h-3.5 ${activeTab === 'chat' ? 'text-purple-500' : ''}`} />
+                    AI 伴读
+                </span>
+                {activeTab === 'chat' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-purple-500 rounded-full" />}
+             </button>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-4 bg-white scroll-smooth" ref={scrollBoxRef}>
+
+            {activeTab === 'comments' ? (
+                <div className="space-y-6 min-h-full">
+                    {!detail.comments?.length && (
+                        <div className="text-center py-10 text-gray-400 text-xs">暂无评论，来抢沙发吧</div>
+                    )}
+                    {detail.comments?.map((c) => (
+                        <div key={c.id} className="flex gap-3">
+                             <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${c.author}`} className="w-8 h-8 rounded-full shrink-0 border border-gray-100" />
+                             <div className="flex-1">
+                                <div className="text-xs text-gray-400 mb-1">{c.author}</div>
+                                <div className="text-sm text-gray-800 leading-relaxed">
+                                    <ReactMarkdown>{c.text}</ReactMarkdown>
+                                </div>
+                                <div className="flex gap-4 mt-2 text-gray-400">
+                                    <Heart className="w-3.5 h-3.5 cursor-pointer hover:text-xhs-red" />
+                                    <MessageCircle className="w-3.5 h-3.5 cursor-pointer hover:text-blue-500" />
+                                </div>
+                             </div>
+                        </div>
+                    ))}
+                </div>
             ) : (
-              <p className="text-gray-500 text-sm">No comments available</p>
+                <div className="space-y-4 pb-4">
+                    <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                        <div className="flex items-center gap-2 mb-2 text-purple-700 font-bold text-sm">
+                            <Bot className="w-4 h-4" />
+                            <span>AI 智能研报</span>
+                        </div>
+                        {analysis ? (
+                             <div className="text-sm text-purple-900 leading-relaxed markdown-body">
+                                <ReactMarkdown>{analysis.summary?.key_insights?.[0] || '分析完成'}</ReactMarkdown>
+                             </div>
+                        ) : (
+                             <div className="flex space-x-1 h-5 items-center">
+                                <span className="text-xs text-gray-400">正在阅读文章...</span>
+                                <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce"></div>
+                             </div>
+                        )}
+                    </div>
+
+                    {chatHistory.map((msg, idx) => (
+                        <div key={idx} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                             <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'ai' ? 'bg-purple-100 text-purple-600' : 'bg-gray-800 text-white'}`}>
+                                {msg.role === 'ai' ? <Sparkles className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                             </div>
+                             <div className={`max-w-[85%] text-sm p-3 rounded-2xl shadow-sm ${msg.role === 'ai' ? 'bg-white text-gray-800 rounded-tl-none border border-gray-100' : 'bg-xhs-red text-white rounded-tr-none'}`}>
+                                {msg.loading ? (
+                                     <div className="flex space-x-1 items-center h-5 px-1">
+                                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
+                                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce delay-100"></div>
+                                     </div>
+                                ) : (
+                                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                )}
+                             </div>
+                        </div>
+                    ))}
+                </div>
             )}
           </div>
 
-          {/* AI Copilot Sidebar */}
-          {showAI && (
-            <AICopilot
-              messages={chatHistory}
-              onSend={handleChat}
-              onClose={() => setShowAI(false)}
-              loading={chatLoading}
-            />
-          )}
-        </div>
-
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 bg-white/80 backdrop-blur p-2 rounded-full text-gray-600 hover:bg-white z-30"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function CommentItem({ comment }: { comment: Comment }) {
-  return (
-    <div className="flex items-start space-x-3">
-      <img
-        src={`https://i.pravatar.cc/30?u=${comment.author}`}
-        alt={comment.author}
-        className="w-8 h-8 rounded-full mt-1"
-      />
-      <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 flex-1">
-        <div className="flex justify-between text-xs text-gray-500 mb-1">
-          <span className="font-bold text-gray-900">{comment.author}</span>
-          <span>{new Date(comment.time * 1000).toLocaleDateString()}</span>
-        </div>
-        <p className="text-sm text-gray-800" dangerouslySetInnerHTML={{ __html: comment.text }} />
-        {comment.replies && comment.replies.length > 0 && (
-          <div className="mt-2 pl-4 border-l-2 border-gray-200 space-y-2">
-            {comment.replies.map((reply) => (
-              <CommentItem key={reply.id} comment={reply} />
-            ))}
+          {/* Input Area */}
+          <div className="p-3 bg-white border-t border-gray-100 shrink-0 safe-pb">
+            <div className={`flex items-center gap-2 bg-gray-100 rounded-full px-4 py-2 transition-all focus-within:bg-white focus-within:ring-2 ${activeTab === 'chat' ? 'focus-within:ring-purple-100' : 'focus-within:ring-red-100'}`}>
+                {activeTab === 'chat' ? <Sparkles className="w-4 h-4 text-purple-500" /> : <Send className="w-4 h-4 text-gray-400" />}
+                <input
+                    value={inputMsg}
+                    onChange={(e) => setInputMsg(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                    type="text"
+                    placeholder={activeTab === 'chat' ? "问 AI 关于文章..." : "说点什么..."}
+                    className="bg-transparent flex-1 text-sm outline-none placeholder-gray-400"
+                />
+                <button
+                    onClick={handleSend}
+                    disabled={!inputMsg.trim()}
+                    className={`font-bold text-sm px-2 ${activeTab === 'chat' ? 'text-purple-600' : 'text-xhs-red'} disabled:opacity-50`}
+                >
+                    发送
+                </button>
+            </div>
           </div>
-        )}
+
+        </div>
       </div>
     </div>
   );
-}
+};
+
+export default ArticleModal;

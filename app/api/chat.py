@@ -116,8 +116,13 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class AnalyzeArticleRequest(BaseModel):
+    """Analyze article request model."""
+    item_id: str
+
+
 @router.post("/chat/analyze-article")
-async def analyze_article(item_id: str):
+async def analyze_article(request: AnalyzeArticleRequest):
     """
     Deep analysis of a specific article.
 
@@ -126,6 +131,7 @@ async def analyze_article(item_id: str):
     - Key points
     - Comment analysis
     """
+    item_id = request.item_id
     try:
         logger.info(f"Analyzing article: {item_id}")
 
