@@ -2,6 +2,7 @@
 Chat API endpoints for intelligent Q&A.
 """
 
+import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -124,7 +125,7 @@ class AnalyzeArticleRequest(BaseModel):
 @router.post("/chat/analyze-article")
 async def analyze_article(request: AnalyzeArticleRequest):
     """
-    Deep analysis of a specific article.
+    Deep analysis of a specific article (优化版 - 支持并发).
 
     Returns:
     - Article summary
@@ -133,19 +134,11 @@ async def analyze_article(request: AnalyzeArticleRequest):
     """
     item_id = request.item_id
     try:
-        logger.info(f"Analyzing article: {item_id}")
+        logger.info(f"Starting fast analysis for article: {item_id}")
 
-        # 1. Generate summary
-        summary_agent = SummaryAgent()
-        summary = summary_agent.summarize_by_id(item_id)
-
-        # 2. Analyze comments
-        comment_agent = CommentAnalysisAgent()
-        comments = comment_agent.analyze_article_comments(item_id)
-
-        # 3. Get article metadata（将 item_id 转为整数）
-        item_id_int = int(item_id)
+        # 从缓存获取文章基本信息
         vector_store = VectorStoreManager()
+        item_id_int = int(item_id)
         results = vector_store.similarity_search(
             query="article",
             k=1,
@@ -153,8 +146,11 @@ async def analyze_article(request: AnalyzeArticleRequest):
         )
 
         article_info = {}
+        title = ""
+        content = ""
+        comments_summary = ""
+
         if results:
-            # 过滤出 article 类型
             article_results = [r for r in results if r.metadata.get("doc_type") == "article"]
             if article_results:
                 doc = article_results[0]
@@ -165,13 +161,59 @@ async def analyze_article(request: AnalyzeArticleRequest):
                     "score": doc.metadata.get("score"),
                     "tags": doc.metadata.get("tags", "")
                 }
+                title = doc.metadata.get("title", "")
+                content = doc.page_content
+
+        # 从存储获取评论摘要
+        try:
+            from app.crawler.storage import load_articles_from_storage
+            all_articles = load_articles_from_storage()
+            article = next((a for a in all_articles if a.get("item_id") == item_id_int), None)
+            if article:
+                comments_summary = article.get("comments_summary", "")
+        except Exception as e:
+            logger.warning(f"Failed to load article data for analysis: {e}")
+
+        # 使用异步分析器
+        from app.optimizers.async_analyzer import analysis_queue
+
+        # 如果没有内容，不进行深度分析
+        if not content and not comments_summary:
+            logger.info(f"No content available for article {item_id}, skipping analysis")
+            return {
+                "article_info": article_info,
+                "summary": {
+                    "summary": "文章内容过短，无法生成深度分析",
+                    "key_points": ["内容不足"],
+                    "technical_highlights": "N/A",
+                    "potential_impact": "N/A"
+                },
+                "comments_analysis": {
+                    "core_controversies": "无评论数据可供分析",
+                    "mainstream_opinion": "N/A",
+                    "valuable_insights": [],
+                    "sentiment": "中性"
+                }
+            }
+
+        # 异步分析
+        result = await analysis_queue.analyze_cached(
+            item_id=item_id,
+            title=title,
+            content=content,
+            comments_summary=comments_summary
+        )
+
+        logger.info(f"Fast analysis completed for article {item_id}")
 
         return {
             "article_info": article_info,
-            "summary": summary,
-            "comments_analysis": comments
+            "summary": result.summary,
+            "comments_analysis": result.comments_analysis,
+            "processing_time": result.processing_time,
+            "cache_hit": result.timestamp < time.time() - 1  # 如果是1秒内，认为是缓存命中
         }
 
     except Exception as e:
-        logger.error(f"Article analysis error: {e}")
+        logger.error(f"Fast article analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
